@@ -12,3 +12,7 @@ Optifine HD_U M6 pre2 1.8.9 MCP
 ![i](screenshot/3.png)
 
 ![i](screenshot/4.png)
+
+### 致谢
+
+- [Event API](https://github.com/cubk1/EventManager)
