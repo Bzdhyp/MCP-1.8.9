@@ -1,9 +1,9 @@
 # MCP-1.8.9
 Optifine HD_U M6 pre2 1.8.9 MCP
 
-一个Minecraft 1.8.9 Vanilla客户端 Optifine HD_U M6 pre2以及删除Optifine大部分反射
-使用JDK17
-# 游戏截图
+A Minecraft 1.8.9 Vanilla client with Optifine HD_U M6 pre2 and most of Optifine's reflections removed
+Use JDK17
+# Game screenshots
 
 ![i](screenshot/1.png)
 
@@ -13,6 +13,6 @@ Optifine HD_U M6 pre2 1.8.9 MCP
 
 ![i](screenshot/4.png)
 
-### 致谢
+### Thanks
 
 - [Event API](https://github.com/cubk1/EventManager)
