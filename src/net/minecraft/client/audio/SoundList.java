@@ -110,7 +110,7 @@ public class SoundList
         public static enum Type
         {
             FILE("file"),
-            SOUND_EVENT("com/cubk/event");
+            SOUND_EVENT("event");
 
             private final String field_148583_c;
 
