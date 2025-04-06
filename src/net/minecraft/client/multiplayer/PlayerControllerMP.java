@@ -1,5 +1,7 @@
 package net.minecraft.client.multiplayer;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventAttack;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -492,15 +494,16 @@ public class PlayerControllerMP
     /**
      * Attacks an entity
      */
-    public void attackEntity(EntityPlayer playerIn, Entity targetEntity)
-    {
+    public void attackEntity(EntityPlayer playerIn, Entity targetEntity) {
+        Wrapper.instance.getEventProtocol().call(new EventAttack(targetEntity, true));
+
         this.syncCurrentPlayItem();
         this.netClientHandler.addToSendQueue(new C02PacketUseEntity(targetEntity, C02PacketUseEntity.Action.ATTACK));
 
-        if (this.currentGameType != WorldSettings.GameType.SPECTATOR)
-        {
+        if (this.currentGameType != WorldSettings.GameType.SPECTATOR) {
             playerIn.attackTargetEntityWithCurrentItem(targetEntity);
         }
+        Wrapper.instance.getEventProtocol().call(new EventAttack(targetEntity, false));
     }
 
     /**

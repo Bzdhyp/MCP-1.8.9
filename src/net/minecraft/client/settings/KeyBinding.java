@@ -1,5 +1,7 @@
 package net.minecraft.client.settings;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventKey;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import java.util.List;
@@ -18,7 +20,7 @@ public class KeyBinding implements Comparable<KeyBinding>
     private int keyCode;
 
     /** Is the key held down? */
-    private boolean pressed;
+    public boolean pressed;
     private int pressTime;
 
     public static void onTick(int keyCode)
@@ -47,20 +49,16 @@ public class KeyBinding implements Comparable<KeyBinding>
         }
     }
 
-    public static void unPressAllKeys()
-    {
-        for (KeyBinding keybinding : keybindArray)
-        {
-            keybinding.unpressKey();
+    public static void unPressAllKeys() {
+        for (KeyBinding keybinding : keybindArray) {
+            keybinding.unpressKey(keybinding.getKeyCode());
         }
     }
 
-    public static void resetKeyBindingArrayAndHash()
-    {
+    public static void resetKeyBindingArrayAndHash() {
         hash.clearMap();
 
-        for (KeyBinding keybinding : keybindArray)
-        {
+        for (KeyBinding keybinding : keybindArray) {
             hash.addKey(keybinding.keyCode, keybinding);
         }
     }
@@ -111,10 +109,16 @@ public class KeyBinding implements Comparable<KeyBinding>
         }
     }
 
-    private void unpressKey()
-    {
-        this.pressTime = 0;
-        this.pressed = false;
+    private void unpressKey(int key) {
+        if (isKeyDown()) {
+            EventKey keyPressEvent = new EventKey(key);
+            Wrapper.instance.getEventProtocol().call(keyPressEvent);
+
+            if (!keyPressEvent.isCancelled()) {
+                this.pressTime = 0;
+                this.pressed = false;
+            }
+        }
     }
 
     public String getKeyDescription()

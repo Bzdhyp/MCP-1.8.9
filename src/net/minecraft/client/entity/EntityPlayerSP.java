@@ -1,5 +1,10 @@
 package net.minecraft.client.entity;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventMotion;
+import com.clientbase.events.EventMove;
+import com.clientbase.events.EventSlowDown;
+import com.clientbase.events.EventUpdate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.MovingSoundMinecartRiding;
 import net.minecraft.client.audio.PositionedSoundRecord;
@@ -42,20 +47,14 @@ import net.minecraft.potion.Potion;
 import net.minecraft.stats.StatBase;
 import net.minecraft.stats.StatFileWriter;
 import net.minecraft.tileentity.TileEntitySign;
-import net.minecraft.util.BlockPos;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumParticleTypes;
-import net.minecraft.util.IChatComponent;
-import net.minecraft.util.MovementInput;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.*;
 import net.minecraft.world.IInteractionObject;
 import net.minecraft.world.World;
 
-public class EntityPlayerSP extends AbstractClientPlayer
-{
+public class EntityPlayerSP extends AbstractClientPlayer {
     public final NetHandlerPlayClient sendQueue;
     private final StatFileWriter statWriter;
+    public int offGroundTicks, onGroundTicks;
 
     /**
      * The last X position which was transmitted to the server, used to determine when the X position changes and needs
@@ -165,19 +164,16 @@ public class EntityPlayerSP extends AbstractClientPlayer
     /**
      * Called to update the entity's position/logic.
      */
-    public void onUpdate()
-    {
-        if (this.worldObj.isBlockLoaded(new BlockPos(this.posX, 0.0D, this.posZ)))
-        {
+    public void onUpdate() {
+        Wrapper.instance.getEventProtocol().call(new EventUpdate());
+
+        if (this.worldObj.isBlockLoaded(new BlockPos(this.posX, 0.0D, this.posZ))) {
             super.onUpdate();
 
-            if (this.isRiding())
-            {
+            if (this.isRiding()) {
                 this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(this.rotationYaw, this.rotationPitch, this.onGround));
                 this.sendQueue.addToSendQueue(new C0CPacketInput(this.moveStrafing, this.moveForward, this.movementInput.jump, this.movementInput.sneak));
-            }
-            else
-            {
+            } else {
                 this.onUpdateWalkingPlayer();
             }
         }
@@ -186,18 +182,23 @@ public class EntityPlayerSP extends AbstractClientPlayer
     /**
      * called every tick when the player is on foot. Performs all the things that normally happen during movement.
      */
-    public void onUpdateWalkingPlayer()
-    {
-        boolean flag = this.isSprinting();
+    public void onUpdateWalkingPlayer() {
+        if (this.onGround) {
+            offGroundTicks = 0;
+            onGroundTicks++;
+        } else {
+            onGroundTicks = 0;
+            offGroundTicks++;
+        }
 
-        if (flag != this.serverSprintState)
-        {
-            if (flag)
-            {
+        // 1.7 右键🦌方块一直触发动画代码
+        boolean flag = this.isSprinting();
+        if (mc.gameSettings.keyBindAttack.isKeyDown() && mc.thePlayer.isUsingItem())
+            if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) if (mc.thePlayer != null) mc.thePlayer.clientSideSwing();
+        if (flag != this.serverSprintState) {
+            if (flag) {
                 this.sendQueue.addToSendQueue(new C0BPacketEntityAction(this, C0BPacketEntityAction.Action.START_SPRINTING));
-            }
-            else
-            {
+            } else {
                 this.sendQueue.addToSendQueue(new C0BPacketEntityAction(this, C0BPacketEntityAction.Action.STOP_SPRINTING));
             }
 
@@ -206,78 +207,80 @@ public class EntityPlayerSP extends AbstractClientPlayer
 
         boolean flag1 = this.isSneaking();
 
-        if (flag1 != this.serverSneakState)
-        {
-            if (flag1)
-            {
+        if (flag1 != this.serverSneakState) {
+            if (flag1) {
                 this.sendQueue.addToSendQueue(new C0BPacketEntityAction(this, C0BPacketEntityAction.Action.START_SNEAKING));
-            }
-            else
-            {
+            } else {
                 this.sendQueue.addToSendQueue(new C0BPacketEntityAction(this, C0BPacketEntityAction.Action.STOP_SNEAKING));
             }
 
             this.serverSneakState = flag1;
         }
 
-        if (this.isCurrentViewEntity())
-        {
-            double d0 = this.posX - this.lastReportedPosX;
-            double d1 = this.getEntityBoundingBox().minY - this.lastReportedPosY;
-            double d2 = this.posZ - this.lastReportedPosZ;
-            double d3 = (double)(this.rotationYaw - this.lastReportedYaw);
-            double d4 = (double)(this.rotationPitch - this.lastReportedPitch);
-            boolean flag2 = d0 * d0 + d1 * d1 + d2 * d2 > 9.0E-4D || this.positionUpdateTicks >= 20;
-            boolean flag3 = d3 != 0.0D || d4 != 0.0D;
+        if (this.isCurrentViewEntity()) {
+            EventMotion event = new EventMotion(this.posX, this.getEntityBoundingBox().minY, this.posZ, this.rotationYaw, this.rotationPitch, this.onGround);
+            Wrapper.instance.getEventProtocol().call(event);
 
-            if (this.ridingEntity == null)
-            {
-                if (flag2 && flag3)
-                {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.posX, this.getEntityBoundingBox().minY, this.posZ, this.rotationYaw, this.rotationPitch, this.onGround));
+            if (!event.isCancelled()) {
+                double posX = event.getX(), posY = event.getY(), posZ = event.getZ();
+                float rotationYaw = event.getYaw(), rotationPitch = event.getPitch();
+                boolean onGround = event.isOnGround();
+
+                double d0 = posX - this.lastReportedPosX;
+                double d1 = posY - this.lastReportedPosY;
+                double d2 = posZ - this.lastReportedPosZ;
+                double d3 = rotationYaw - this.lastReportedYaw;
+                double d4 = rotationPitch - this.lastReportedPitch;
+                boolean flag2 = d0 * d0 + d1 * d1 + d2 * d2 > 9.0E-4D || this.positionUpdateTicks >= 20;
+                boolean flag3 = d3 != 0.0D || d4 != 0.0D;
+
+                if (this.ridingEntity == null) {
+                    if (flag2 && flag3) {
+                        this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(posX, posY, posZ, rotationYaw, rotationPitch, onGround));
+                    } else if (flag2) {
+                        this.sendQueue.addToSendQueue(new C03PacketPlayer.C04PacketPlayerPosition(posX, posY, posZ, onGround));
+                    } else if (flag3) {
+                        this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(rotationYaw, rotationPitch, onGround));
+                    } else {
+                        this.sendQueue.addToSendQueue(new C03PacketPlayer(onGround));
+                    }
+                } else {
+                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.motionX, -999.0D, this.motionZ, rotationYaw, rotationPitch, onGround));
+                    flag2 = false;
                 }
-                else if (flag2)
-                {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C04PacketPlayerPosition(this.posX, this.getEntityBoundingBox().minY, this.posZ, this.onGround));
+
+                ++this.positionUpdateTicks;
+
+                if (flag2) {
+                    this.lastReportedPosX = posX;
+                    this.lastReportedPosY = posY;
+                    this.lastReportedPosZ = posZ;
+                    this.positionUpdateTicks = 0;
                 }
-                else if (flag3)
-                {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(this.rotationYaw, this.rotationPitch, this.onGround));
-                }
-                else
-                {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer(this.onGround));
+
+                if (flag3) {
+                    this.lastReportedYaw = rotationYaw;
+                    this.lastReportedPitch = rotationPitch;
                 }
             }
-            else
-            {
-                this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.motionX, -999.0D, this.motionZ, this.rotationYaw, this.rotationPitch, this.onGround));
-                flag2 = false;
-            }
-
-            ++this.positionUpdateTicks;
-
-            if (flag2)
-            {
-                this.lastReportedPosX = this.posX;
-                this.lastReportedPosY = this.getEntityBoundingBox().minY;
-                this.lastReportedPosZ = this.posZ;
-                this.positionUpdateTicks = 0;
-            }
-
-            if (flag3)
-            {
-                this.lastReportedYaw = this.rotationYaw;
-                this.lastReportedPitch = this.rotationPitch;
-            }
+            event.setPost();
+            Wrapper.instance.getEventProtocol().call(event);
+            this.rotationPitchHead = event.getPitch();
         }
+    }
+
+    @Override
+    public void moveEntity(double x, double y, double z) {
+        EventMove e = new EventMove(x, y, z);
+        Wrapper.instance.getEventProtocol().call(e);
+        if (e.isCancelled()) return;
+        super.moveEntity(e.getX(), e.getY(), e.getZ());
     }
 
     /**
      * Called when player presses the drop item key
      */
-    public EntityItem dropOneItem(boolean dropAll)
-    {
+    public EntityItem dropOneItem(boolean dropAll) {
         C07PacketPlayerDigging.Action c07packetplayerdigging$action = dropAll ? C07PacketPlayerDigging.Action.DROP_ALL_ITEMS : C07PacketPlayerDigging.Action.DROP_ITEM;
         this.sendQueue.addToSendQueue(new C07PacketPlayerDigging(c07packetplayerdigging$action, BlockPos.ORIGIN, EnumFacing.DOWN));
         return null;
@@ -299,10 +302,14 @@ public class EntityPlayerSP extends AbstractClientPlayer
     }
 
     /**
+     * Client-side swing for swinging while block hitting.
+     */
+    public void clientSideSwing() { super.swingClientSide(); }
+
+    /**
      * Swings the item the player is holding.
      */
-    public void swingItem()
-    {
+    public void swingItem() {
         super.swingItem();
         this.sendQueue.addToSendQueue(new C0APacketAnimation());
     }
@@ -712,34 +719,27 @@ public class EntityPlayerSP extends AbstractClientPlayer
      * Called frequently so the entity can update its state every tick as required. For example, zombies and skeletons
      * use this to react to sunlight and start to burn.
      */
-    public void onLivingUpdate()
-    {
-        if (this.sprintingTicksLeft > 0)
-        {
+    public void onLivingUpdate() {
+        if (this.sprintingTicksLeft > 0) {
             --this.sprintingTicksLeft;
 
-            if (this.sprintingTicksLeft == 0)
-            {
+            if (this.sprintingTicksLeft == 0) {
                 this.setSprinting(false);
             }
         }
 
-        if (this.sprintToggleTimer > 0)
-        {
+        if (this.sprintToggleTimer > 0) {
             --this.sprintToggleTimer;
         }
 
         this.prevTimeInPortal = this.timeInPortal;
 
-        if (this.inPortal)
-        {
-            if (this.mc.currentScreen != null && !this.mc.currentScreen.doesGuiPauseGame())
-            {
+        if (this.inPortal) {
+            if (this.mc.currentScreen != null && !this.mc.currentScreen.doesGuiPauseGame()) {
                 this.mc.displayGuiScreen((GuiScreen)null);
             }
 
-            if (this.timeInPortal == 0.0F)
-            {
+            if (this.timeInPortal == 0.0F) {
                 this.mc.getSoundHandler().playSound(PositionedSoundRecord.create(new ResourceLocation("portal.trigger"), this.rand.nextFloat() * 0.4F + 0.8F));
             }
 
@@ -751,31 +751,23 @@ public class EntityPlayerSP extends AbstractClientPlayer
             }
 
             this.inPortal = false;
-        }
-        else if (this.isPotionActive(Potion.confusion) && this.getActivePotionEffect(Potion.confusion).getDuration() > 60)
-        {
+        } else if (this.isPotionActive(Potion.confusion) && this.getActivePotionEffect(Potion.confusion).getDuration() > 60) {
             this.timeInPortal += 0.006666667F;
 
-            if (this.timeInPortal > 1.0F)
-            {
+            if (this.timeInPortal > 1.0F) {
                 this.timeInPortal = 1.0F;
             }
-        }
-        else
-        {
-            if (this.timeInPortal > 0.0F)
-            {
+        } else {
+            if (this.timeInPortal > 0.0F) {
                 this.timeInPortal -= 0.05F;
             }
 
-            if (this.timeInPortal < 0.0F)
-            {
+            if (this.timeInPortal < 0.0F) {
                 this.timeInPortal = 0.0F;
             }
         }
 
-        if (this.timeUntilPortal > 0)
-        {
+        if (this.timeUntilPortal > 0) {
             --this.timeUntilPortal;
         }
 
@@ -785,10 +777,11 @@ public class EntityPlayerSP extends AbstractClientPlayer
         boolean flag2 = this.movementInput.moveForward >= f;
         this.movementInput.updatePlayerMoveState();
 
-        if (this.isUsingItem() && !this.isRiding())
-        {
-            this.movementInput.moveStrafe *= 0.2F;
-            this.movementInput.moveForward *= 0.2F;
+        EventSlowDown slowdown = new EventSlowDown(0.2F, 0.2F);
+        Wrapper.instance.getEventProtocol().call(slowdown);
+        if (this.isUsingItem() && !this.isRiding() && !slowdown.isCancelled()) {
+            this.movementInput.moveStrafe *= slowdown.getForwardMultiplier();
+            this.movementInput.moveForward *= slowdown.getStrafeMultiplier();
             this.sprintToggleTimer = 0;
         }
 
@@ -798,46 +791,32 @@ public class EntityPlayerSP extends AbstractClientPlayer
         this.pushOutOfBlocks(this.posX + (double)this.width * 0.35D, this.getEntityBoundingBox().minY + 0.5D, this.posZ + (double)this.width * 0.35D);
         boolean flag3 = (float)this.getFoodStats().getFoodLevel() > 6.0F || this.capabilities.allowFlying;
 
-        if (this.onGround && !flag1 && !flag2 && this.movementInput.moveForward >= f && !this.isSprinting() && flag3 && !this.isUsingItem() && !this.isPotionActive(Potion.blindness))
-        {
-            if (this.sprintToggleTimer <= 0 && !this.mc.gameSettings.keyBindSprint.isKeyDown())
-            {
+        if (this.onGround && !flag1 && !flag2 && this.movementInput.moveForward >= f && !this.isSprinting() && flag3 && !this.isUsingItem() && !this.isPotionActive(Potion.blindness)) {
+            if (this.sprintToggleTimer <= 0 && !this.mc.gameSettings.keyBindSprint.isKeyDown()) {
                 this.sprintToggleTimer = 7;
-            }
-            else
-            {
+            } else {
                 this.setSprinting(true);
             }
         }
 
-        if (!this.isSprinting() && this.movementInput.moveForward >= f && flag3 && !this.isUsingItem() && !this.isPotionActive(Potion.blindness) && this.mc.gameSettings.keyBindSprint.isKeyDown())
-        {
+        if (!this.isSprinting() && this.movementInput.moveForward >= f && flag3 && !this.isUsingItem() && !this.isPotionActive(Potion.blindness) && this.mc.gameSettings.keyBindSprint.isKeyDown()) {
             this.setSprinting(true);
         }
 
-        if (this.isSprinting() && (this.movementInput.moveForward < f || this.isCollidedHorizontally || !flag3))
-        {
+        if (this.isSprinting() && (this.movementInput.moveForward < f || this.isCollidedHorizontally || !flag3)) {
             this.setSprinting(false);
         }
 
-        if (this.capabilities.allowFlying)
-        {
-            if (this.mc.playerController.isSpectatorMode())
-            {
-                if (!this.capabilities.isFlying)
-                {
+        if (this.capabilities.allowFlying) {
+            if (this.mc.playerController.isSpectatorMode()) {
+                if (!this.capabilities.isFlying) {
                     this.capabilities.isFlying = true;
                     this.sendPlayerAbilities();
                 }
-            }
-            else if (!flag && this.movementInput.jump)
-            {
-                if (this.flyToggleTimer == 0)
-                {
+            } else if (!flag && this.movementInput.jump) {
+                if (this.flyToggleTimer == 0) {
                     this.flyToggleTimer = 7;
-                }
-                else
-                {
+                } else {
                     this.capabilities.isFlying = !this.capabilities.isFlying;
                     this.sendPlayerAbilities();
                     this.flyToggleTimer = 0;
@@ -845,64 +824,47 @@ public class EntityPlayerSP extends AbstractClientPlayer
             }
         }
 
-        if (this.capabilities.isFlying && this.isCurrentViewEntity())
-        {
-            if (this.movementInput.sneak)
-            {
+        if (this.capabilities.isFlying && this.isCurrentViewEntity()) {
+            if (this.movementInput.sneak) {
                 this.motionY -= (double)(this.capabilities.getFlySpeed() * 3.0F);
             }
 
-            if (this.movementInput.jump)
-            {
+            if (this.movementInput.jump) {
                 this.motionY += (double)(this.capabilities.getFlySpeed() * 3.0F);
             }
         }
 
-        if (this.isRidingHorse())
-        {
-            if (this.horseJumpPowerCounter < 0)
-            {
+        if (this.isRidingHorse()) {
+            if (this.horseJumpPowerCounter < 0) {
                 ++this.horseJumpPowerCounter;
 
-                if (this.horseJumpPowerCounter == 0)
-                {
+                if (this.horseJumpPowerCounter == 0) {
                     this.horseJumpPower = 0.0F;
                 }
             }
 
-            if (flag && !this.movementInput.jump)
-            {
+            if (flag && !this.movementInput.jump) {
                 this.horseJumpPowerCounter = -10;
                 this.sendHorseJump();
-            }
-            else if (!flag && this.movementInput.jump)
-            {
+            } else if (!flag && this.movementInput.jump) {
                 this.horseJumpPowerCounter = 0;
                 this.horseJumpPower = 0.0F;
-            }
-            else if (flag)
-            {
+            } else if (flag) {
                 ++this.horseJumpPowerCounter;
 
-                if (this.horseJumpPowerCounter < 10)
-                {
+                if (this.horseJumpPowerCounter < 10) {
                     this.horseJumpPower = (float)this.horseJumpPowerCounter * 0.1F;
-                }
-                else
-                {
+                } else {
                     this.horseJumpPower = 0.8F + 2.0F / (float)(this.horseJumpPowerCounter - 9) * 0.1F;
                 }
             }
-        }
-        else
-        {
+        } else {
             this.horseJumpPower = 0.0F;
         }
 
         super.onLivingUpdate();
 
-        if (this.onGround && this.capabilities.isFlying && !this.mc.playerController.isSpectatorMode())
-        {
+        if (this.onGround && this.capabilities.isFlying && !this.mc.playerController.isSpectatorMode()) {
             this.capabilities.isFlying = false;
             this.sendPlayerAbilities();
         }

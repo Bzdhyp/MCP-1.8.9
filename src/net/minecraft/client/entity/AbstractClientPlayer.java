@@ -1,5 +1,7 @@
 package net.minecraft.client.entity;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventLook;
 import com.mojang.authlib.GameProfile;
 import java.io.File;
 import net.minecraft.client.Minecraft;
@@ -22,9 +24,9 @@ import net.minecraft.world.WorldSettings;
 import net.optifine.player.CapeUtils;
 import net.optifine.player.PlayerConfigurations;
 import net.optifine.reflect.Reflector;
+import org.lwjgl.util.vector.Vector2f;
 
-public abstract class AbstractClientPlayer extends EntityPlayer
-{
+public abstract class AbstractClientPlayer extends EntityPlayer {
     private NetworkPlayerInfo playerInfo;
     private ResourceLocation locationOfCape = null;
     private long reloadCapeTimeMs = 0L;
@@ -217,8 +219,15 @@ public abstract class AbstractClientPlayer extends EntityPlayer
     /**
      * interpolated look vector
      */
-    public Vec3 getLook(float partialTicks)
-    {
-        return this.getVectorForRotation(this.rotationPitch, this.rotationYaw);
+    public Vec3 getLook(float partialTicks) {
+        float yaw = this.rotationYaw;
+        float pitch = this.rotationPitch;
+
+        EventLook lookEvent = new EventLook(new Vector2f(yaw, pitch));
+        Wrapper.instance.getEventProtocol().call(lookEvent);
+        yaw = lookEvent.getRotation().x;
+        pitch = lookEvent.getRotation().y;
+
+        return this.getVectorForRotation(pitch, yaw);
     }
 }

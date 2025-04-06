@@ -1,5 +1,7 @@
 package net.minecraft.entity;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventJump;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Maps;
@@ -12,6 +14,7 @@ import java.util.UUID;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.ai.attributes.AttributeModifier;
 import net.minecraft.entity.ai.attributes.BaseAttributeMap;
@@ -105,6 +108,12 @@ public abstract class EntityLivingBase extends Entity
 
     /** Entity head rotation yaw at previous tick */
     public float prevRotationYawHead;
+
+    /** Entity head rotation pitch */
+    public float rotationPitchHead;
+
+    /** Entity head rotation pitch at previous tick */
+    public float prevRotationPitchHead;
 
     /**
      * A factor used to determine how far this entity will move each tick if it is jumping or falling.
@@ -379,6 +388,7 @@ public abstract class EntityLivingBase extends Entity
         this.prevMovedDistance = this.movedDistance;
         this.prevRenderYawOffset = this.renderYawOffset;
         this.prevRotationYawHead = this.rotationYawHead;
+        this.prevRotationPitchHead = this.rotationPitchHead;
         this.prevRotationYaw = this.rotationYaw;
         this.prevRotationPitch = this.rotationPitch;
         this.worldObj.theProfiler.endSection();
@@ -1331,9 +1341,19 @@ public abstract class EntityLivingBase extends Entity
      * Returns an integer indicating the end point of the swing animation, used by {@link #swingProgress} to provide a
      * progress indicator. Takes dig speed enchantments into account.
      */
-    private int getArmSwingAnimationEnd()
-    {
+    private int getArmSwingAnimationEnd() {
         return this.isPotionActive(Potion.digSpeed) ? 6 - (1 + this.getActivePotionEffect(Potion.digSpeed).getAmplifier()) * 1 : (this.isPotionActive(Potion.digSlowdown) ? 6 + (1 + this.getActivePotionEffect(Potion.digSlowdown).getAmplifier()) * 2 : 6);
+    }
+
+    /**
+     * Swings the item the player is holding.
+     */
+    public void swingClientSide() {
+        if (!this.isSwingInProgress || this.swingProgressInt >= this.getArmSwingAnimationEnd() / 2
+                || this.swingProgressInt < 0) {
+            this.swingProgressInt = -1;
+            this.isSwingInProgress = true;
+        }
     }
 
     /**
@@ -1564,20 +1584,27 @@ public abstract class EntityLivingBase extends Entity
     /**
      * Causes this entity to do an upwards motion (jumping).
      */
-    protected void jump()
-    {
-        this.motionY = (double)this.getJumpUpwardsMotion();
+    protected void jump() {
+        EventJump jumpEvent = new EventJump(this.movementYaw, this.getJumpUpwardsMotion());
 
-        if (this.isPotionActive(Potion.jump))
-        {
-            this.motionY += (double)((float)(this.getActivePotionEffect(Potion.jump).getAmplifier() + 1) * 0.1F);
+        this.motionY = (double) jumpEvent.getMotion();
+
+        if (this.isPotionActive(Potion.jump)) {
+            this.motionY += (double) ((float) (this.getActivePotionEffect(Potion.jump).getAmplifier() + 1) * 0.1F);
         }
 
-        if (this.isSprinting())
-        {
-            float f = this.rotationYaw * 0.017453292F;
-            this.motionX -= (double)(MathHelper.sin(f) * 0.2F);
-            this.motionZ += (double)(MathHelper.cos(f) * 0.2F);
+        if (this instanceof EntityPlayerSP) {
+            Wrapper.instance.getEventProtocol().call(jumpEvent);
+
+            this.movementYaw = jumpEvent.getYaw();
+
+            this.velocityYaw = jumpEvent.getYaw();
+
+        }
+        if (this.isSprinting()) {
+            float f = jumpEvent.getYaw() * 0.017453292F;
+            this.motionX -= (double) (MathHelper.sin(f) * 0.2F);
+            this.motionZ += (double) (MathHelper.cos(f) * 0.2F);
         }
 
         this.isAirBorne = true;

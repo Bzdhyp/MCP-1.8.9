@@ -1,5 +1,9 @@
 package net.minecraft.client;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventKey;
+import com.clientbase.events.EventTick;
+import com.clientbase.events.EventWorld;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -509,6 +513,9 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
         this.effectRenderer = new EffectRenderer(this.theWorld, this.renderEngine);
         this.checkGLError("Post startup");
         this.ingameGUI = new GuiIngame(this);
+
+        // client
+        Wrapper.instance.init();
 
         if (this.serverName != null) {
             this.displayGuiScreen(new GuiConnecting(new GuiMainMenu(), this, this.serverName, this.serverPort));
@@ -1577,17 +1584,21 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
     /**
      * Runs the current tick.
      */
-    public void runTick() throws IOException
-    {
-        if (this.rightClickDelayTimer > 0)
-        {
+    public void runTick() throws IOException {
+        if (thePlayer != null) {
+            thePlayer.lastMovementYaw = thePlayer.movementYaw;
+            thePlayer.movementYaw = thePlayer.velocityYaw = thePlayer.rotationYaw;
+        }
+        if (this.thePlayer != null) {
+            Wrapper.instance.getEventProtocol().call(new EventTick());
+        }
+        if (this.rightClickDelayTimer > 0) {
             --this.rightClickDelayTimer;
         }
 
         this.mcProfiler.startSection("gui");
 
-        if (!this.isGamePaused)
-        {
+        if (!this.isGamePaused) {
             this.ingameGUI.updateTick();
         }
 
@@ -1595,8 +1606,7 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
         this.entityRenderer.getMouseOver(1.0F);
         this.mcProfiler.startSection("gameMode");
 
-        if (!this.isGamePaused && this.theWorld != null)
-        {
+        if (!this.isGamePaused && this.theWorld != null) {
             this.playerController.updateController();
         }
 
@@ -1769,6 +1779,7 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
                     }
                     else
                     {
+                        Wrapper.instance.getEventProtocol().call(new EventKey(k));
                         if (k == 1)
                         {
                             this.displayInGameMenu();
@@ -2149,8 +2160,7 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
     /**
      * unloads the current world first
      */
-    public void loadWorld(WorldClient worldClientIn)
-    {
+    public void loadWorld(WorldClient worldClientIn) {
         this.loadWorld(worldClientIn, "");
     }
 
@@ -2158,6 +2168,14 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
      * par2Str is displayed on the loading screen to the user unloads the current world first
      */
     public void loadWorld(WorldClient worldClientIn, String loadingMessage) {
+        if (worldClientIn != this.theWorld) {
+            this.entityRenderer.getMapItemRenderer().clearLoadedMaps();
+        }
+        if (theWorld != null) {
+            EventWorld e = new EventWorld.Unload(theWorld);
+            Wrapper.instance.getEventProtocol().call(e);
+        }
+
         if (worldClientIn == null) {
             NetHandlerPlayClient nethandlerplayclient = this.getNetHandler();
 

@@ -4,6 +4,10 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventSafeWalk;
+import com.clientbase.events.EventStrafe;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockFence;
 import net.minecraft.block.BlockFenceGate;
@@ -47,12 +51,12 @@ import net.minecraft.world.Explosion;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 
-public abstract class Entity implements ICommandSender
-{
+public abstract class Entity implements ICommandSender {
     private static final AxisAlignedBB ZERO_AABB = new AxisAlignedBB(0.0D, 0.0D, 0.0D, 0.0D, 0.0D, 0.0D);
     private static int nextEntityID;
     private int entityId;
     public double renderDistanceWeight;
+    public float movementYaw, velocityYaw, lastMovementYaw;
 
     /**
      * Blocks entities from spawning when they do their AABB check to make sure the spot is clear of entities that can
@@ -595,22 +599,17 @@ public abstract class Entity implements ICommandSender
     /**
      * Tries to moves the entity by the passed in displacement. Args: x, y, z
      */
-    public void moveEntity(double x, double y, double z)
-    {
-        if (this.noClip)
-        {
+    public void moveEntity(double x, double y, double z) {
+        if (this.noClip) {
             this.setEntityBoundingBox(this.getEntityBoundingBox().offset(x, y, z));
             this.resetPositionToBB();
-        }
-        else
-        {
+        } else {
             this.worldObj.theProfiler.startSection("move");
             double d0 = this.posX;
             double d1 = this.posY;
             double d2 = this.posZ;
 
-            if (this.isInWeb)
-            {
+            if (this.isInWeb) {
                 this.isInWeb = false;
                 x *= 0.25D;
                 y *= 0.05000000074505806D;
@@ -623,71 +622,51 @@ public abstract class Entity implements ICommandSender
             double d3 = x;
             double d4 = y;
             double d5 = z;
-            boolean flag = this.onGround && this.isSneaking() && this instanceof EntityPlayer;
 
-            if (flag)
-            {
+            EventSafeWalk safeWalkEvent = new EventSafeWalk();
+            Wrapper.instance.getEventProtocol().call(safeWalkEvent);
+
+            boolean flag = this.onGround && (this.isSneaking() || safeWalkEvent.isSafe()) && this instanceof EntityPlayer;
+
+            if (flag) {
                 double d6;
 
-                for (d6 = 0.05D; x != 0.0D && this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().offset(x, -1.0D, 0.0D)).isEmpty(); d3 = x)
-                {
-                    if (x < d6 && x >= -d6)
-                    {
+                for (d6 = 0.05D; x != 0.0D && this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().offset(x, -1.0D, 0.0D)).isEmpty(); d3 = x) {
+                    if (x < d6 && x >= -d6) {
                         x = 0.0D;
-                    }
-                    else if (x > 0.0D)
-                    {
+                    } else if (x > 0.0D) {
                         x -= d6;
-                    }
-                    else
-                    {
+                    } else {
                         x += d6;
                     }
                 }
 
-                for (; z != 0.0D && this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().offset(0.0D, -1.0D, z)).isEmpty(); d5 = z)
-                {
-                    if (z < d6 && z >= -d6)
-                    {
+                for (; z != 0.0D && this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().offset(0.0D, -1.0D, z)).isEmpty(); d5 = z) {
+                    if (z < d6 && z >= -d6) {
                         z = 0.0D;
-                    }
-                    else if (z > 0.0D)
-                    {
+                    } else if (z > 0.0D) {
                         z -= d6;
-                    }
-                    else
-                    {
+                    } else {
                         z += d6;
                     }
                 }
 
-                for (; x != 0.0D && z != 0.0D && this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().offset(x, -1.0D, z)).isEmpty(); d5 = z)
-                {
-                    if (x < d6 && x >= -d6)
-                    {
+                for (; x != 0.0D && z != 0.0D && this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().offset(x, -1.0D, z)).isEmpty(); d5 = z) {
+                    if (x < d6 && x >= -d6) {
                         x = 0.0D;
-                    }
-                    else if (x > 0.0D)
-                    {
+                    } else if (x > 0.0D) {
                         x -= d6;
-                    }
-                    else
-                    {
+                    } else {
                         x += d6;
                     }
 
                     d3 = x;
 
-                    if (z < d6 && z >= -d6)
-                    {
+                    if (z < d6 && z >= -d6) {
                         z = 0.0D;
-                    }
-                    else if (z > 0.0D)
-                    {
+                    } else if (z > 0.0D) {
                         z -= d6;
-                    }
-                    else
-                    {
+                    } else {
                         z += d6;
                     }
                 }
@@ -696,16 +675,14 @@ public abstract class Entity implements ICommandSender
             List<AxisAlignedBB> list1 = this.worldObj.getCollidingBoundingBoxes(this, this.getEntityBoundingBox().addCoord(x, y, z));
             AxisAlignedBB axisalignedbb = this.getEntityBoundingBox();
 
-            for (AxisAlignedBB axisalignedbb1 : list1)
-            {
+            for (AxisAlignedBB axisalignedbb1 : list1) {
                 y = axisalignedbb1.calculateYOffset(this.getEntityBoundingBox(), y);
             }
 
             this.setEntityBoundingBox(this.getEntityBoundingBox().offset(0.0D, y, 0.0D));
             boolean flag1 = this.onGround || d4 != y && d4 < 0.0D;
 
-            for (AxisAlignedBB axisalignedbb2 : list1)
-            {
+            for (AxisAlignedBB axisalignedbb2 : list1) {
                 x = axisalignedbb2.calculateXOffset(this.getEntityBoundingBox(), x);
             }
 
@@ -1221,26 +1198,29 @@ public abstract class Entity implements ICommandSender
     /**
      * Used in both water and by flying objects
      */
-    public void moveFlying(float strafe, float forward, float friction)
-    {
+    public void moveFlying(float strafe, float forward, float friction) {
+        EventStrafe eventStrafe = new EventStrafe(strafe, forward, friction, this.rotationYaw);
+        Wrapper.instance.getEventProtocol().call(eventStrafe);
+        if (eventStrafe.isCancelled()) return;
+        forward = eventStrafe.getForward();
+        strafe = eventStrafe.getStrafe();
+        friction = eventStrafe.getFriction();
         float f = strafe * strafe + forward * forward;
 
-        if (f >= 1.0E-4F)
-        {
+        if (f >= 1.0E-4F) {
             f = MathHelper.sqrt_float(f);
 
-            if (f < 1.0F)
-            {
+            if (f < 1.0F) {
                 f = 1.0F;
             }
 
             f = friction / f;
             strafe = strafe * f;
             forward = forward * f;
-            float f1 = MathHelper.sin(this.rotationYaw * (float)Math.PI / 180.0F);
-            float f2 = MathHelper.cos(this.rotationYaw * (float)Math.PI / 180.0F);
-            this.motionX += (double)(strafe * f2 - forward * f1);
-            this.motionZ += (double)(forward * f2 + strafe * f1);
+            float f1 = MathHelper.sin(eventStrafe.yaw * (float) Math.PI / 180.0F);
+            float f2 = MathHelper.cos(eventStrafe.yaw * (float) Math.PI / 180.0F);
+            this.motionX += (double) (strafe * f2 - forward * f1);
+            this.motionZ += (double) (forward * f2 + strafe * f1);
         }
     }
 

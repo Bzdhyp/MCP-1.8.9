@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventRender3D;
 import com.google.common.base.Predicates;
 import com.google.gson.JsonSyntaxException;
 import java.io.IOException;
@@ -1663,6 +1665,8 @@ public class EntityRenderer implements IResourceManagerReloadListener {
             this.mc.mcProfiler.endStartSection("aboveClouds");
             this.renderCloudsCheck(renderglobal, partialTicks, pass);
         }
+
+        Wrapper.instance.getEventProtocol().call(new EventRender3D(partialTicks));
 
         this.mc.mcProfiler.endStartSection("hand");
 

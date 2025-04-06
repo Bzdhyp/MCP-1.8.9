@@ -1,8 +1,14 @@
 package net.minecraft.client.gui;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventPreRender;
+import com.clientbase.events.EventRender2D;
+import com.clientbase.util.render.RoundedUtil;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+
+import java.awt.*;
 import java.util.Collection;
 import java.util.List;
 import java.util.Random;
@@ -147,22 +153,20 @@ public class GuiIngame extends Gui {
             this.renderPumpkinOverlay(scaledresolution);
         }
 
-        if (!this.mc.thePlayer.isPotionActive(Potion.confusion))
-        {
+        if (!this.mc.thePlayer.isPotionActive(Potion.confusion)) {
             float f = this.mc.thePlayer.prevTimeInPortal + (this.mc.thePlayer.timeInPortal - this.mc.thePlayer.prevTimeInPortal) * partialTicks;
 
-            if (f > 0.0F)
-            {
+            if (f > 0.0F) {
                 this.renderPortal(f, scaledresolution);
             }
         }
 
-        if (this.mc.playerController.isSpectator())
-        {
+        // TargetHUD use
+        Wrapper.instance.getEventProtocol().call(new EventPreRender());
+
+        if (this.mc.playerController.isSpectator()) {
             this.spectatorGui.renderTooltip(scaledresolution, partialTicks);
-        }
-        else
-        {
+        } else {
             this.renderTooltip(scaledresolution, partialTicks);
         }
 
@@ -359,12 +363,12 @@ public class GuiIngame extends Gui {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GlStateManager.disableLighting();
         GlStateManager.enableAlpha();
+
+        Wrapper.instance.getEventProtocol().call(new EventRender2D(partialTicks));
     }
 
-    protected void renderTooltip(ScaledResolution sr, float partialTicks)
-    {
-        if (this.mc.getRenderViewEntity() instanceof EntityPlayer entityplayer)
-        {
+    protected void renderTooltip(ScaledResolution sr, float partialTicks) {
+        if (this.mc.getRenderViewEntity() instanceof EntityPlayer entityplayer) {
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             this.mc.getTextureManager().bindTexture(widgetsTexPath);
             int i = sr.getScaledWidth() / 2;
@@ -377,9 +381,9 @@ public class GuiIngame extends Gui {
             GlStateManager.enableBlend();
             GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
             RenderHelper.enableGUIStandardItemLighting();
+            GlStateManager.enableDepth();
 
-            for (int j = 0; j < 9; ++j)
-            {
+            for (int j = 0; j < 9; ++j) {
                 int k = sr.getScaledWidth() / 2 - 90 + j * 20 + 2;
                 int l = sr.getScaledHeight() - 16 - 3;
                 this.renderHotbarItem(j, k, l, partialTicks, entityplayer);

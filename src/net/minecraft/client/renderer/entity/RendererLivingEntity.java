@@ -1,5 +1,7 @@
 package net.minecraft.client.renderer.entity;
 
+import com.clientbase.Wrapper;
+import com.clientbase.events.EventNameTagRender;
 import com.google.common.collect.Lists;
 import java.nio.FloatBuffer;
 import java.util.List;
@@ -143,7 +145,9 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
                 f2 = f1 - f;
             }
 
-            float f7 = entity.prevRotationPitch + (entity.rotationPitch - entity.prevRotationPitch) * partialTicks;
+            float f7 = entity == this.renderManager.livingPlayer
+                    ? entity.prevRotationPitchHead + (entity.rotationPitchHead - entity.prevRotationPitchHead) * partialTicks
+                    : entity.prevRotationPitch + (entity.rotationPitch - entity.prevRotationPitch) * partialTicks;
             this.renderLivingAt(entity, x, y, z);
             float f8 = this.handleRotationFloat(entity, partialTicks);
             this.rotateCorpse(entity, f8, f, partialTicks);
@@ -586,6 +590,11 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
     }
 
     public void renderName(T entity, double x, double y, double z) {
+        if (entity instanceof EntityPlayer) {
+            EventNameTagRender nametagRenderEvent = new EventNameTagRender();
+            Wrapper.instance.getEventProtocol().call(nametagRenderEvent);
+            if (nametagRenderEvent.isCancelled()) return;
+        }
         if (this.canRenderName(entity)) {
             double d0 = entity.getDistanceSqToEntity(this.renderManager.livingPlayer);
             float f = entity.isSneaking() ? NAME_TAG_RANGE_SNEAK : NAME_TAG_RANGE;

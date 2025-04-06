@@ -1,9 +1,12 @@
 package net.minecraft.client.gui;
 
+import com.clientbase.util.render.RoundedUtil;
+import com.clientbase.util.render.animation.advanced.impl.EaseBackIn;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import java.awt.Toolkit;
+
+import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
@@ -45,6 +48,7 @@ public abstract class GuiScreen extends Gui implements GuiYesNoCallback {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Set<String> PROTOCOLS = Sets.newHashSet("http", "https");
     private static final Splitter NEWLINE_SPLITTER = Splitter.on('\n');
+    private EaseBackIn screenAnimation;
 
     /** Reference to the Minecraft object. */
     protected Minecraft mc;
@@ -77,19 +81,31 @@ public abstract class GuiScreen extends Gui implements GuiYesNoCallback {
     private int touchValue;
     private URI clickedLinkURI;
 
-    public void onDrag(int mouseX, int mouseY) {
+    public void onDrag(int mouseX, int mouseY) {}
+
+    private final int screenAnimationMS = 1400;
+
+    public GuiScreen() {
+        screenAnimation = new EaseBackIn(screenAnimationMS, 255, 1.5F);
+        alpha = 0;
     }
 
     /**
      * Draws the screen and all the components in it. Args : mouseX, mouseY, renderPartialTicks
      */
+    private int alpha;
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        for (int i = 0; i < this.buttonList.size(); ++i) {
-            this.buttonList.get(i).drawButton(this.mc, mouseX, mouseY);
+        for (GuiButton guiButton : this.buttonList) {
+            guiButton.drawButton(this.mc, mouseX, mouseY);
         }
 
-        for (int j = 0; j < this.labelList.size(); ++j) {
-            this.labelList.get(j).drawLabel(this.mc, mouseX, mouseY);
+        for (GuiLabel guiLabel : this.labelList) {
+            guiLabel.drawLabel(this.mc, mouseX, mouseY);
+        }
+
+        if (!this.mc.isGamePaused() && this.mc.theWorld == null) {
+            alpha = Math.min(screenAnimation.getOutput().intValue(), 255);
+            RoundedUtil.drawRound(-100, -100, 5000, 5000, 6, new Color(0,0,0, 255 - alpha));
         }
     }
 
@@ -522,8 +538,8 @@ public abstract class GuiScreen extends Gui implements GuiYesNoCallback {
      * Adds the buttons (and other controls) to the screen in question. Called when the GUI is displayed and when the
      * window resizes, the buttonList is cleared beforehand.
      */
-    public void initGui()
-    {
+    public void initGui() {
+        screenAnimation = new EaseBackIn(screenAnimationMS, 255, 1.5F);
     }
 
     /**
